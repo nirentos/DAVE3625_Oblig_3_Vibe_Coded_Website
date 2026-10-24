@@ -4,17 +4,637 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Local Frequency — Music Player</title>
+<!--
+  LOCAL FREQUENCY — STANDALONE MUSIC PLAYER
+  Edit this file with any text editor, then reopen it in your browser.
+
+  CUSTOMIZATION GUIDE
+  1. Colors and spacing: look for :root in the CSS below.
+  2. Layout and button labels: edit the HTML inside <body>.
+  3. Playback speed choices: edit <select id="playbackSpeed">.
+  4. Playback logic: look for the PLAYER and PLAYBACK SETTINGS JS comments.
+  5. BPM detection: look for BPM METADATA and BPM ESTIMATION comments.
+
+  No dependencies, accounts, or external scripts are required.
+-->
 <style>
-:root{color-scheme:dark;--bg:#101411;--panel:#181f1a;--panel2:#202a23;--line:#303b33;--text:#edf4ed;--muted:#9ba99e;--green:#a7e6bd;--green2:#4d9c70;--orange:#f1c27d}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#23352a 0,transparent 40%),var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
-button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:9px 12px;transition:.15s}button:hover{border-color:var(--green);transform:translateY(-1px)}button:disabled{opacity:.35;cursor:not-allowed;transform:none}button.primary{background:var(--green);color:#132019;border-color:var(--green);font-weight:750}button.ghost{background:transparent}button.active{border-color:var(--green);color:var(--green)}input,select{background:#111713;border:1px solid var(--line);border-radius:9px;color:var(--text);padding:9px;min-width:0}input[type=range]{padding:0;accent-color:var(--green);cursor:pointer}input[type=checkbox]{accent-color:var(--green)}
-.wrap{max-width:1280px;margin:auto;padding:28px 24px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:25px}.brand{display:flex;gap:13px;align-items:center}.logo{height:48px;width:48px;border-radius:14px;background:#294636;color:var(--green);display:grid;place-items:center;font-size:25px}.eyebrow{font-size:11px;letter-spacing:.17em;color:var(--green);font-weight:800}.brand h1{font-size:21px;margin:2px 0 0;letter-spacing:.04em}.tagline{color:var(--muted);font-size:13px}.localtag{border:1px solid #456b51;color:var(--green);border-radius:30px;padding:6px 10px;font-size:11px;letter-spacing:.12em;font-weight:800}
-.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:18px;align-items:start}.panel{background:linear-gradient(145deg,rgba(29,38,31,.96),rgba(21,27,23,.97));border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0;box-shadow:0 15px 50px #0002}.panelhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:17px}.panelhead h2{font-size:16px;margin:0}.muted{color:var(--muted)}.small{font-size:12px}.library-actions{display:flex;gap:8px;flex-wrap:wrap}.folder{padding:19px;border:1px dashed #536657;background:#141b16;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.folder strong{display:block}.folder p{margin:3px 0 0;color:var(--muted);font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:15px 0}.stat{background:#111713;border:1px solid #29342c;border-radius:12px;padding:12px}.stat b{font-size:20px;display:block}.stat span{font-size:11px;color:var(--muted)}
-.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:12px;color:var(--muted)}.field.full{grid-column:1/-1}.rowline{display:flex;gap:8px;align-items:center}.rowline>*{min-width:0}.rowline input[type=number]{width:88px}.checkline{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}.modegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.modegrid button{min-height:42px}.divider{height:1px;background:var(--line);margin:18px 0}.tracklist{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:12px}.track{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px 11px;border-bottom:1px solid #29332b}.track:last-child{border-bottom:0}.track:hover{background:#ffffff06}.track.current{background:#25423177}.track .num{font-size:11px;color:var(--muted);text-align:center}.trackname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:650;font-size:13px}.trackmeta{font-size:11px;color:var(--muted);margin-top:2px}.trackright{display:flex;gap:7px;align-items:center}.bpm{font-size:11px;color:var(--green);background:#20372a;border-radius:6px;padding:4px 6px;white-space:nowrap}.mini{padding:5px 7px;border-radius:7px;font-size:12px}
-.now{display:flex;gap:15px;align-items:center}.cover{width:100px;height:100px;flex-shrink:0;border-radius:16px;background:linear-gradient(135deg,#355642,#17271d 70%);display:grid;place-items:center;color:var(--green);font-size:42px;border:1px solid #42614a}.nowtitle{font-size:20px;font-weight:750;overflow-wrap:anywhere}.nowartist{font-size:13px;color:var(--muted);margin-top:4px}.pill{display:inline-block;font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:30px;margin-top:9px;color:var(--green)}
-.seek{margin:22px 0 8px}.times{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.seek input{width:100%;margin:6px 0}.playerbuttons{display:flex;align-items:center;justify-content:center;gap:11px;margin:14px 0 17px}.playerbuttons button{border:0;background:transparent;font-size:20px;padding:8px 10px}.playerbuttons .play{width:54px;height:54px;background:var(--green);color:#122017;border-radius:50%;font-size:21px;font-weight:800}.volume{display:flex;align-items:center;gap:11px;margin:0 auto;max-width:340px}.volume input{flex:1}.queueheader{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.queueheader h2{margin:0;font-size:16px}.queue{max-height:365px;overflow:auto}.qitem{display:grid;grid-template-columns:25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px 7px;border-bottom:1px solid #29332b}.qitem.dragging{opacity:.4}.qitem.dragover{border-top:2px solid var(--green)}.drag{color:#718074;cursor:grab;text-align:center}.qtitle{font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.qmeta{font-size:11px;color:var(--muted)}.qactions{display:flex;gap:5px}.qactions button{padding:5px 7px;font-size:11px}.empty{padding:28px 12px;text-align:center;color:var(--muted);font-size:13px}.footer{margin-top:18px;font-size:11px;color:var(--muted);line-height:1.6}.notice{margin-top:12px;color:var(--orange);font-size:12px;min-height:17px}.hidden{display:none!important}
-@media(max-width:900px){.grid{grid-template-columns:1fr}.wrap{padding:20px 14px 35px}.panel{padding:16px}.top{align-items:flex-start}.folder{align-items:flex-start;flex-direction:column}.nowtitle{font-size:17px}}
-@media(max-width:420px){.controls{grid-template-columns:1fr}.field.full{grid-column:auto}.cover{width:78px;height:78px}.nowtitle{font-size:15px}.stats{gap:5px}.stat{padding:9px}.track{grid-template-columns:20px minmax(0,1fr) auto}.localtag{display:none}}
+:root {
+  color-scheme:dark;
+  --bg:#101411;
+  --panel:#181f1a;
+  --panel2:#202a23;
+  --line:#303b33;
+  --text:#edf4ed;
+  --muted:#9ba99e;
+  --green:#a7e6bd;
+  --green2:#4d9c70;
+  --orange:#f1c27d
+}
+
+* {
+  box-sizing:border-box
+}
+
+body {
+  margin:0;
+  background:radial-gradient(ellipse at 15% 0%,#23352a 0,transparent 40%),var(--bg);
+  color:var(--text);
+  font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;
+  min-height:100vh
+}
+
+button,input,select {
+  font:inherit
+}
+
+button {
+  cursor:pointer;
+  border:1px solid var(--line);
+  background:var(--panel2);
+  color:var(--text);
+  border-radius:10px;
+  padding:9px 12px;
+  transition:.15s
+}
+
+button:hover {
+  border-color:var(--green);
+  transform:translateY(-1px)
+}
+
+button:disabled {
+  opacity:.35;
+  cursor:not-allowed;
+  transform:none
+}
+
+button.primary {
+  background:var(--green);
+  color:#132019;
+  border-color:var(--green);
+  font-weight:750
+}
+
+button.ghost {
+  background:transparent
+}
+
+button.active {
+  border-color:var(--green);
+  color:var(--green)
+}
+
+input,select {
+  background:#111713;
+  border:1px solid var(--line);
+  border-radius:9px;
+  color:var(--text);
+  padding:9px;
+  min-width:0
+}
+
+input[type=range] {
+  padding:0;
+  accent-color:var(--green);
+  cursor:pointer
+}
+
+input[type=checkbox] {
+  accent-color:var(--green)
+}
+
+.wrap {
+  max-width:1280px;
+  margin:auto;
+  padding:28px 24px 50px
+}
+
+.top {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:16px;
+  margin-bottom:25px
+}
+
+.brand {
+  display:flex;
+  gap:13px;
+  align-items:center
+}
+
+.logo {
+  height:48px;
+  width:48px;
+  border-radius:14px;
+  background:#294636;
+  color:var(--green);
+  display:grid;
+  place-items:center;
+  font-size:25px
+}
+
+.eyebrow {
+  font-size:11px;
+  letter-spacing:.17em;
+  color:var(--green);
+  font-weight:800
+}
+
+.brand h1 {
+  font-size:21px;
+  margin:2px 0 0;
+  letter-spacing:.04em
+}
+
+.tagline {
+  color:var(--muted);
+  font-size:13px
+}
+
+.localtag {
+  border:1px solid #456b51;
+  color:var(--green);
+  border-radius:30px;
+  padding:6px 10px;
+  font-size:11px;
+  letter-spacing:.12em;
+  font-weight:800
+}
+
+.grid {
+  display:grid;
+  grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);
+  gap:18px;
+  align-items:start
+}
+
+.panel {
+  background:linear-gradient(145deg,rgba(29,38,31,.96),rgba(21,27,23,.97));
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:20px;
+  min-width:0;
+  box-shadow:0 15px 50px #0002
+}
+
+.panelhead {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:17px
+}
+
+.panelhead h2 {
+  font-size:16px;
+  margin:0
+}
+
+.muted {
+  color:var(--muted)
+}
+
+.small {
+  font-size:12px
+}
+
+.library-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap
+}
+
+.folder {
+  padding:19px;
+  border:1px dashed #536657;
+  background:#141b16;
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:17px
+}
+
+.folder strong {
+  display:block
+}
+
+.folder p {
+  margin:3px 0 0;
+  color:var(--muted);
+  font-size:12px
+}
+
+.stats {
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:9px;
+  margin:15px 0
+}
+
+.stat {
+  background:#111713;
+  border:1px solid #29342c;
+  border-radius:12px;
+  padding:12px
+}
+
+.stat b {
+  font-size:20px;
+  display:block
+}
+
+.stat span {
+  font-size:11px;
+  color:var(--muted)
+}
+
+.controls {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px
+}
+
+.field {
+  display:flex;
+  flex-direction:column;
+  gap:6px
+}
+
+.field label {
+  font-size:12px;
+  color:var(--muted)
+}
+
+.field.full {
+  grid-column:1/-1
+}
+
+.rowline {
+  display:flex;
+  gap:8px;
+  align-items:center
+}
+
+.rowline>* {
+  min-width:0
+}
+
+.rowline input[type=number] {
+  width:88px
+}
+
+.checkline {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  color:var(--muted);
+  font-size:13px
+}
+
+.modegrid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:14px
+}
+
+.modegrid button {
+  min-height:42px
+}
+
+.divider {
+  height:1px;
+  background:var(--line);
+  margin:18px 0
+}
+
+.tracklist {
+  max-height:380px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:12px
+}
+
+.track {
+  display:grid;
+  grid-template-columns:26px minmax(0,1fr) auto;
+  gap:9px;
+  align-items:center;
+  padding:10px 11px;
+  border-bottom:1px solid #29332b
+}
+
+.track:last-child {
+  border-bottom:0
+}
+
+.track:hover {
+  background:#ffffff06
+}
+
+.track.current {
+  background:#25423177
+}
+
+.track .num {
+  font-size:11px;
+  color:var(--muted);
+  text-align:center
+}
+
+.trackname {
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-weight:650;
+  font-size:13px
+}
+
+.trackmeta {
+  font-size:11px;
+  color:var(--muted);
+  margin-top:2px
+}
+
+.trackright {
+  display:flex;
+  gap:7px;
+  align-items:center
+}
+
+.bpm {
+  font-size:11px;
+  color:var(--green);
+  background:#20372a;
+  border-radius:6px;
+  padding:4px 6px;
+  white-space:nowrap
+}
+
+.mini {
+  padding:5px 7px;
+  border-radius:7px;
+  font-size:12px
+}
+
+.now {
+  display:flex;
+  gap:15px;
+  align-items:center
+}
+
+.cover {
+  width:100px;
+  height:100px;
+  flex-shrink:0;
+  border-radius:16px;
+  background:linear-gradient(135deg,#355642,#17271d 70%);
+  display:grid;
+  place-items:center;
+  color:var(--green);
+  font-size:42px;
+  border:1px solid #42614a
+}
+
+.nowtitle {
+  font-size:20px;
+  font-weight:750;
+  overflow-wrap:anywhere
+}
+
+.nowartist {
+  font-size:13px;
+  color:var(--muted);
+  margin-top:4px
+}
+
+.pill {
+  display:inline-block;
+  font-size:11px;
+  padding:4px 8px;
+  border:1px solid var(--line);
+  border-radius:30px;
+  margin-top:9px;
+  color:var(--green)
+}
+
+.seek {
+  margin:22px 0 8px
+}
+
+.times {
+  display:flex;
+  justify-content:space-between;
+  font-size:11px;
+  color:var(--muted);
+  font-variant-numeric:tabular-nums
+}
+
+.seek input {
+  width:100%;
+  margin:6px 0
+}
+
+.playerbuttons {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:11px;
+  margin:14px 0 17px
+}
+
+.playerbuttons button {
+  border:0;
+  background:transparent;
+  font-size:20px;
+  padding:8px 10px
+}
+
+.playerbuttons .play {
+  width:54px;
+  height:54px;
+  background:var(--green);
+  color:#122017;
+  border-radius:50%;
+  font-size:21px;
+  font-weight:800
+}
+
+.volume {
+  display:flex;
+  align-items:center;
+  gap:11px;
+  margin:0 auto;
+  max-width:340px
+}
+
+.volume input {
+  flex:1
+}
+
+.queueheader {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:12px
+}
+
+.queueheader h2 {
+  margin:0;
+  font-size:16px
+}
+
+.queue {
+  max-height:365px;
+  overflow:auto
+}
+
+.qitem {
+  display:grid;
+  grid-template-columns:25px minmax(0,1fr) auto;
+  align-items:center;
+  gap:8px;
+  padding:10px 7px;
+  border-bottom:1px solid #29332b
+}
+
+.qitem.dragging {
+  opacity:.4
+}
+
+.qitem.dragover {
+  border-top:2px solid var(--green)
+}
+
+.drag {
+  color:#718074;
+  cursor:grab;
+  text-align:center
+}
+
+.qtitle {
+  font-size:13px;
+  font-weight:650;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis
+}
+
+.qmeta {
+  font-size:11px;
+  color:var(--muted)
+}
+
+.qactions {
+  display:flex;
+  gap:5px
+}
+
+.qactions button {
+  padding:5px 7px;
+  font-size:11px
+}
+
+.empty {
+  padding:28px 12px;
+  text-align:center;
+  color:var(--muted);
+  font-size:13px
+}
+
+.footer {
+  margin-top:18px;
+  font-size:11px;
+  color:var(--muted);
+  line-height:1.6
+}
+
+.notice {
+  margin-top:12px;
+  color:var(--orange);
+  font-size:12px;
+  min-height:17px
+}
+
+.hidden {
+  display:none!important
+}
+
+@media(max-width:900px) {
+  .grid {
+    grid-template-columns:1fr
+  }
+  .wrap {
+    padding:20px 14px 35px
+  }
+  .panel {
+    padding:16px
+  }
+  .top {
+    align-items:flex-start
+  }
+  .folder {
+    align-items:flex-start;
+    flex-direction:column
+  }
+  .nowtitle {
+    font-size:17px
+  }
+}
+
+@media(max-width:420px) {
+  .controls {
+    grid-template-columns:1fr
+  }
+  .field.full {
+    grid-column:auto
+  }
+  .cover {
+    width:78px;
+    height:78px
+  }
+  .nowtitle {
+    font-size:15px
+  }
+  .stats {
+    gap:5px
+  }
+  .stat {
+    padding:9px
+  }
+  .track {
+    grid-template-columns:20px minmax(0,1fr) auto
+  }
+  .localtag {
+    display:none
+  }
+}
+
+/* PLAYBACK SETTINGS
+   Adjust these rules to change the layout of the volume and speed controls. */
+.playback-settings {
+  display: grid;
+  gap: 15px;
+  margin-top: 12px;
+}
+
+.speed-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.speed-control label {
+  font-size: 13px;
+}
+
+.speed-control select {
+  min-width: 155px;
+}
 </style>
 </head>
 <body>
@@ -60,7 +680,25 @@ button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--li
         <button id="next" title="Next track" aria-label="Next track">|▶</button>
         <button id="repeatToggle" title="Repeat current track" aria-label="Repeat current track">↻</button>
       </div>
-      <div class="volume"><span class="muted" title="Volume">◖))</span><input id="volume" type="range" min="0" max="1" step=".01" value=".75" aria-label="Volume"><span class="small" id="volumeLabel">75%</span></div>
+      <!-- PLAYBACK SETTINGS: Add or remove speed options here if you wish. -->
+      <div class="playback-settings">
+        <div class="volume">
+          <label for="volume" class="muted">Volume</label>
+          <input id="volume" type="range" min="0" max="1" step=".01" value=".75" aria-label="Volume">
+          <span class="small" id="volumeLabel">75%</span>
+        </div>
+        <div class="speed-control">
+          <label for="playbackSpeed" class="muted">Playback speed</label>
+          <select id="playbackSpeed" aria-label="Playback speed">
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1" selected>1× (Normal)</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+        </div>
+      </div>
       <audio id="audio" preload="metadata"></audio>
       <div class="divider"></div>
       <div class="queueheader"><h2>Up next</h2><span class="small muted" id="queueCount">0 tracks</span></div>
@@ -71,6 +709,8 @@ button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--li
   </main>
 </div>
 <script>
+// All application logic lives in this script block.
+// Sections below are labeled to make future manual edits easier.
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
@@ -85,6 +725,7 @@ function nameFromFile(f){return f.name.replace(/\.[^.]+$/,'')}
 function trackTitle(t){return t.title||t.name}
 function getTrack(id){return library.find(t=>t.id===id)}
 function say(s){$('status').textContent=s}
+// BPM METADATA: Read the TBPM tag from MP3 files.
 function parseId3Bpm(buf){ // ID3v2 TBPM text frame (MP3)
   try{
     const b=new Uint8Array(buf); if(b.length<10||String.fromCharCode(...b.slice(0,3))!=='ID3')return null;
@@ -96,12 +737,14 @@ function parseId3Bpm(buf){ // ID3v2 TBPM text frame (MP3)
     }
   }catch(e){} return null;
 }
+// BPM METADATA: Look for embedded BPM before estimating it.
 async function readBpmTag(file){ // scan ID3, then common text metadata in a bounded leading chunk
   try{let buf=await file.slice(0,Math.min(file.size,1024*1024)).arrayBuffer();let bpm=parseId3Bpm(buf);if(bpm)return bpm;
     // Search plain text metadata patterns for BPM/tempo. Does not decode every container format.
     const txt=new TextDecoder('latin1').decode(buf);const m=txt.match(/(?:TBPM|BPM|TEMPO)[^\x20-\x7e]{0,8}(\d{2,3}(?:\.\d+)?)/i);if(m){let n=+m[1];if(n>=30&&n<=300)return Math.round(n)}
   }catch(e){}return null;
 }
+// LIBRARY IMPORT: Load local files, read tags, and start BPM analysis.
 async function addFiles(files){
   const arr=[...files].filter(f=>audioExt.test(f.name)||f.type.startsWith('audio/'));
   if(!arr.length){say('No supported audio files found.');return}
@@ -116,12 +759,14 @@ async function addFiles(files){
   renderAll();say(`Added ${added} track${added===1?'':'s'}. ${library.filter(t=>!t.bpm).length} track(s) need BPM analysis or have no BPM tag.`);
   if($('estimate').checked) library.filter(t=>!t.bpm).forEach(t=>estimateBpm(t));
 }
+// PLAYBACK RULES: Sort tracks by their estimated or tagged BPM.
 function sortByMode(ids,mode){
   const tracks=ids.map(getTrack).filter(Boolean);
   if(mode==='fast')tracks.sort((a,b)=>(b.bpm||0)-(a.bpm||0)||a.name.localeCompare(b.name));
   if(mode==='slow')tracks.sort((a,b)=>(a.bpm||999)-(b.bpm||999)||a.name.localeCompare(b.name));
   return tracks.map(t=>t.id)
 }
+// BPM FILTERS: Apply above/below/range settings.
 function filteredTracks(){
   let tracks=library.slice();const f=$('filter').value,threshold=Number($('threshold').value)||120,min=Number($('minBpm').value)||1,max=Number($('maxBpm').value)||400;
   if(f==='above')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>threshold);
@@ -129,6 +774,7 @@ function filteredTracks(){
   if(f==='range')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>=Math.min(min,max)&&t.bpm<=Math.max(min,max));
   return tracks;
 }
+// QUEUE BUILDING: Rebuild the visible queue from the chosen rules.
 function makeQueue(){let ids=filteredTracks().map(t=>t.id),mode=$('mode').value;
   if(mode==='fast'||mode==='slow')ids=sortByMode(ids,mode);
   if(mode==='random')ids=shuffleIds(ids);
@@ -139,6 +785,7 @@ function makeQueue(){let ids=filteredTracks().map(t=>t.id),mode=$('mode').value;
 function shuffleIds(ids){let a=ids.slice();for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function activeQueue(){return queue.filter(id=>getTrack(id))}
 function currentIndex(){return queue.indexOf(currentId)}
+// QUEUE NAVIGATION: Pick the next track, including no-repeat shuffle.
 function nextId(){
   const q=activeQueue();if(!q.length)return null;
   if(repeatOne&&currentId)return currentId;
@@ -149,6 +796,7 @@ function nextId(){
   let idx=q.indexOf(currentId);if(idx<0)return q[0];return q[idx+1]||null;
 }
 function prevId(){if(history.length>1){history.pop();return history.pop()}const q=activeQueue(),i=q.indexOf(currentId);return q[Math.max(0,i-1)]||null}
+// PLAYER: Switch tracks and start playback.
 async function playTrack(trackId,autoplay=true){
   const t=getTrack(trackId);if(!t)return;
   if(currentId&&currentId!==trackId)history.push(currentId);
@@ -162,6 +810,7 @@ async function playTrack(trackId,autoplay=true){
 }
 function playNext(){const n=nextId();if(n)playTrack(n);else if(activeQueue().length===0)say('Queue is empty. Apply your playback rules or add tracks.')}
 function playPrevious(){if(audio.currentTime>3){audio.currentTime=0;return}const p=prevId();if(p)playTrack(p)}
+// USER INTERFACE: Draw the library list.
 function renderLibrary(){
   const list=$('libraryList');$('libraryLabel').textContent=`${library.length} track${library.length===1?'':'s'}`;
   if(!library.length){list.innerHTML='<div class="empty">Your tracks will appear here.</div>';return}
@@ -169,6 +818,7 @@ function renderLibrary(){
   list.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.play))queue.push(b.dataset.play);playTrack(b.dataset.play)});
   list.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.add)){queue.push(b.dataset.add);renderQueue();say('Added to queue.')}else say('That track is already in the queue.')});
 }
+// USER INTERFACE: Draw and manage the editable queue.
 function renderQueue(){
   const el=$('queue');const q=activeQueue();$('queueCount').textContent=`${q.length} track${q.length===1?'':'s'}`;
   if(!q.length){el.innerHTML='<div class="empty">Your queue is empty.</div>';return}
@@ -185,6 +835,7 @@ function renderQueue(){
     item.addEventListener('drop',e=>{e.preventDefault();item.classList.remove('dragover');const from=e.dataTransfer.getData('text/plain')||dragId;if(from&&from!==item.dataset.id){const a=queue.indexOf(from),b=queue.indexOf(item.dataset.id);if(a>=0&&b>=0){const [v]=queue.splice(a,1);queue.splice(b,0,v);shuffleBag=[];renderQueue()}}});
   });
 }
+// USER INTERFACE: Update the now-playing display.
 function renderNow(){
   const t=getTrack(currentId);$('nowTitle').textContent=t?trackTitle(t):'Nothing playing yet';$('nowArtist').textContent=t?(t.artist||t.file.name):'Choose music from your library';$('nowBpm').textContent=t?(t.bpm?`${t.bpm} BPM`:t.estimating?'Estimating BPM…':'BPM unavailable'):'BPM —';
   $('playPause').textContent=audio.paused?'▶':'Ⅱ';$('playPause').setAttribute('aria-label',audio.paused?'Play':'Pause');$('playState').textContent=audio.paused?'PAUSED':'PLAYING';
@@ -196,6 +847,8 @@ function renderStats(){
 }
 function renderAll(){renderStats();renderLibrary();renderQueue();renderNow()}
 function moveQueue(id,delta){let i=queue.indexOf(id),j=i+delta;if(i<0||j<0||j>=queue.length)return;[queue[i],queue[j]]=[queue[j],queue[i]];shuffleBag=[];renderQueue()}
+// BPM ESTIMATION: Estimate tempo locally using audio waveform periodicity.
+// This is approximate and can produce half-time/double-time readings.
 async function estimateBpm(t){
   if(t.bpm||t.estimating||t.estimateTried)return;
   t.estimating=true;t.estimateTried=true;renderLibrary();renderQueue();renderNow();
@@ -219,6 +872,7 @@ async function estimateBpm(t){
   t.estimating=false;renderStats();renderLibrary();renderQueue();renderNow();
   if(t.bpm&&($('mode').value==='fast'||$('mode').value==='slow'||$('filter').value!=='all')){const idx=queue.indexOf(t.id);if(idx>=0){queue=sortByMode(queue,$('mode').value);renderQueue()}}
 }
+// EVENT HANDLERS: Wire up buttons, inputs, and audio playback events.
 $('addFiles').onclick=()=>$('fileInput').click();$('chooseFolder').onclick=()=>$('folderInput').click();
 $('fileInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
 $('folderInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
@@ -233,8 +887,21 @@ $('playPause').onclick=async()=>{if(!currentId){if(!queue.length)makeQueue();if(
 $('next').onclick=playNext;$('previous').onclick=playPrevious;
 $('shuffleToggle').onclick=()=>{shuffle=!shuffle;$('mode').value=shuffle?'random':'custom';shuffleBag=[];if(shuffle)queue=shuffleIds(queue);renderQueue();renderNow()};
 $('repeatToggle').onclick=()=>{repeatOne=!repeatOne;renderNow()};
-$('volume').oninput=e=>{audio.volume=Number(e.target.value);$('volumeLabel').textContent=Math.round(audio.volume*100)+'%'};
-audio.volume=.75;
+// PLAYBACK SETTINGS
+// Audio playbackRate controls speed without changing the underlying audio file.
+// 1 is normal speed; 0.5 is half speed; 2 is double speed.
+// Most modern browsers preserve pitch automatically while changing speed.
+$('volume').oninput = event => {
+  audio.volume = Number(event.target.value);
+  $('volumeLabel').textContent = Math.round(audio.volume * 100) + '%';
+};
+audio.volume = 0.75;
+
+// The chosen playback speed persists when moving to the next song.
+$('playbackSpeed').onchange = event => {
+  audio.playbackRate = Number(event.target.value);
+};
+audio.playbackRate = Number($('playbackSpeed').value);
 $('seek').oninput=()=>{seeking=true;const d=audio.duration;if(Number.isFinite(d))$('elapsed').textContent=fmt(Number($('seek').value)/1000*d)};
 $('seek').onchange=()=>{if(Number.isFinite(audio.duration))audio.currentTime=Number($('seek').value)/1000*audio.duration;seeking=false};
 audio.addEventListener('loadedmetadata',()=>{const t=getTrack(currentId);if(t&&Number.isFinite(audio.duration)){t.duration=audio.duration;renderStats();renderLibrary();renderQueue()}$('duration').textContent=fmt(audio.duration);$('elapsed').textContent=fmt(audio.currentTime)});
