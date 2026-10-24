@@ -14,6 +14,7 @@
   3. Playback speed choices: edit <select id="playbackSpeed">.
   4. Playback logic: look for the PLAYER and PLAYBACK SETTINGS JS comments.
   5. BPM detection: look for BPM METADATA and BPM ESTIMATION comments.
+  6. Folder playlists: see FOLDER PLAYLISTS and selectedTracks() in JavaScript.
 
   No dependencies, accounts, or external scripts are required.
 -->
@@ -632,6 +633,15 @@ input[type=checkbox] {
   font-size: 13px;
 }
 
+.playlist-picker {
+  margin-bottom: 12px;
+}
+.playlist-picker select {
+  width: 100%;
+}
+.playlist-picker .small {
+  margin-top: 4px;
+}
 .speed-control select {
   min-width: 155px;
 }
@@ -648,7 +658,13 @@ input[type=checkbox] {
       <div class="panelhead"><h2>Your library</h2><div class="library-actions"><button id="addFiles">＋ Add files</button><button id="chooseFolder" class="primary">Choose folder</button></div></div>
       <input id="fileInput" type="file" accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg,.aac,.opus" multiple class="hidden">
       <input id="folderInput" type="file" webkitdirectory directory multiple class="hidden">
-      <div class="folder"><div><strong>Bring your music in</strong><p>Choose a folder or select multiple audio files. Nothing is uploaded.</p></div><span style="font-size:25px">▤</span></div>
+      <div class="folder"><div><strong>Bring your music in</strong><p>Choose a music folder with subfolders. Each subfolder becomes a playlist. Nothing is uploaded.</p></div><span style="font-size:25px">▤</span></div>
+      <!-- PLAYLIST LIBRARY: Folders and subfolders become selectable playlists. -->
+      <div class="field playlist-picker">
+        <label for="playlistSelect">Play from</label>
+        <select id="playlistSelect"><option value="__all__">All music (all folders)</option></select>
+        <div class="small muted" id="playlistHint">Choose a folder containing subfolders to create playlists automatically.</div>
+      </div>
       <div class="stats"><div class="stat"><b id="trackCount">0</b><span>TRACKS</span></div><div class="stat"><b id="knownBpm">0</b><span>BPM KNOWN</span></div><div class="stat"><b id="totalTime">0m</b><span>LIBRARY LENGTH</span></div></div>
       <div class="divider"></div>
       <div class="panelhead"><h2>Playback rules</h2><span class="small muted">Build your queue</span></div>
@@ -716,6 +732,9 @@ input[type=checkbox] {
 const $ = id => document.getElementById(id);
 const audio = $('audio');
 let library = [], queue = [], currentId = null, shuffle = false, repeatOne = false, dragId = null, objectUrls = new Map(), audioContext = null;
+// Folder imports are grouped under their selected root, allowing multiple roots.
+let rootImportNumber = 0;
+const ALL_PLAYLISTS = '__all__';
 let history = [], shuffleBag = [], seeking = false;
 const audioExt = /\.(mp3|flac|wav|m4a|aac|ogg|opus|aiff|aif|wma)$/i;
 function id(){return 't'+Math.random().toString(36).slice(2)+Date.now().toString(36)}
@@ -745,17 +764,62 @@ async function readBpmTag(file){ // scan ID3, then common text metadata in a bou
   }catch(e){}return null;
 }
 // LIBRARY IMPORT: Load local files, read tags, and start BPM analysis.
-async function addFiles(files){
+// FOLDER PLAYLISTS
+// Each imported root gets a unique ID, so identically named subfolders remain distinct.
+// A root-level track belongs to its root playlist; nested tracks belong to their
+// relative subfolder playlist, e.g. "Music / Electronic / Ambient".
+function playlistPath(file, rootName) {
+  const parts = (file.webkitRelativePath || '').split('/').filter(Boolean);
+  return parts.length > 1
+    ? [rootName, ...parts.slice(1, -1)].join(' / ')
+    : rootName;
+}
+function renderPlaylists() {
+  const selector = $('playlistSelect');
+  const selected = selector.value;
+  const paths = [...new Map(library.map(t => [t.playlistKey, t.playlistLabel])).entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  selector.innerHTML = '<option value="__all__">All music (all folders)</option>' +
+    paths.map(([key, label]) => `<option value="${esc(key)}">${esc(label)}</option>`).join('');
+  selector.value = paths.some(([key]) => key === selected) ? selected : ALL_PLAYLISTS;
+  $('playlistHint').textContent = `${paths.length} folder playlist${paths.length === 1 ? '' : 's'} available.`;
+}
+function selectedTracks() {
+  const selection = $('playlistSelect').value;
+  return selection === ALL_PLAYLISTS
+    ? library.slice()
+    : library.filter(t => t.playlistKey === selection);
+}
+
+// LIBRARY IMPORT: Load local files, read tags, and start BPM analysis.
+async function addFiles(files, fromFolder = false){
   const arr=[...files].filter(f=>audioExt.test(f.name)||f.type.startsWith('audio/'));
   if(!arr.length){say('No supported audio files found.');return}
   let added=0;
+  const rootId = 'root-' + (++rootImportNumber);
+  const firstRelative = arr.find(f => f.webkitRelativePath)?.webkitRelativePath || '';
+  const rootName = fromFolder
+    ? (firstRelative.split('/')[0] || `Folder ${rootImportNumber}`)
+    : `Loose files ${rootImportNumber}`;
   for(const file of arr){
-    if(library.some(t=>t.file.name===file.name&&t.file.size===file.size&&t.file.lastModified===file.lastModified))continue;
-    const t={id:id(),file,name:nameFromFile(file),title:nameFromFile(file),artist:'',bpm:null,duration:0,url:null,estimateTried:false,estimating:false};
+    // Avoid duplicate files from the same imported root, but allow different folders
+    // to contain tracks with identical names.
+    const relativePath = file.webkitRelativePath || file.name;
+    if(library.some(t=>t.rootId===rootId&&t.relativePath===relativePath))continue;
+    const folder = playlistPath(file, rootName);
+    const t={id:id(),file,name:nameFromFile(file),title:nameFromFile(file),artist:'',
+      rootId,relativePath,playlistKey:rootId+'::'+folder,playlistLabel:folder,
+      bpm:null,duration:0,url:null,estimateTried:false,estimating:false};
     t.bpm=await readBpmTag(file);
     library.push(t);added++;
   }
-  if(!queue.length)queue=library.map(t=>t.id);
+  renderPlaylists();
+  // Add newly imported music to the current queue only when viewing all music.
+  // Rebuild for the selected playlist when the user applies playback rules.
+  if ($('playlistSelect').value === ALL_PLAYLISTS) {
+    const existing = new Set(queue);
+    for (const t of library) if (!existing.has(t.id)) queue.push(t.id);
+  }
   renderAll();say(`Added ${added} track${added===1?'':'s'}. ${library.filter(t=>!t.bpm).length} track(s) need BPM analysis or have no BPM tag.`);
   if($('estimate').checked) library.filter(t=>!t.bpm).forEach(t=>estimateBpm(t));
 }
@@ -768,7 +832,7 @@ function sortByMode(ids,mode){
 }
 // BPM FILTERS: Apply above/below/range settings.
 function filteredTracks(){
-  let tracks=library.slice();const f=$('filter').value,threshold=Number($('threshold').value)||120,min=Number($('minBpm').value)||1,max=Number($('maxBpm').value)||400;
+  let tracks=selectedTracks();const f=$('filter').value,threshold=Number($('threshold').value)||120,min=Number($('minBpm').value)||1,max=Number($('maxBpm').value)||400;
   if(f==='above')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>threshold);
   if(f==='below')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm<threshold);
   if(f==='range')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>=Math.min(min,max)&&t.bpm<=Math.max(min,max));
@@ -812,9 +876,11 @@ function playNext(){const n=nextId();if(n)playTrack(n);else if(activeQueue().len
 function playPrevious(){if(audio.currentTime>3){audio.currentTime=0;return}const p=prevId();if(p)playTrack(p)}
 // USER INTERFACE: Draw the library list.
 function renderLibrary(){
-  const list=$('libraryList');$('libraryLabel').textContent=`${library.length} track${library.length===1?'':'s'}`;
-  if(!library.length){list.innerHTML='<div class="empty">Your tracks will appear here.</div>';return}
-  list.innerHTML=library.map((t,i)=>`<div class="track ${t.id===currentId?'current':''}"><div class="num">${i+1}</div><div style="min-width:0"><div class="trackname" title="${esc(t.name)}">${esc(t.title)}</div><div class="trackmeta">${esc(t.artist||t.file.name)} · ${fmt(t.duration)}</div></div><div class="trackright">${t.bpm?`<span class="bpm">${t.bpm} BPM</span>`:`<span class="bpm" title="BPM unavailable">— BPM</span>`}<button class="mini" data-play="${t.id}" title="Play track">▶</button><button class="mini" data-add="${t.id}" title="Add to queue">＋</button></div></div>`).join('');
+  const list=$('libraryList');
+  const visible = selectedTracks();
+  $('libraryLabel').textContent=`${visible.length} track${visible.length===1?'':'s'}`;
+  if(!visible.length){list.innerHTML='<div class="empty">Your tracks will appear here.</div>';return}
+  list.innerHTML=visible.map((t,i)=>`<div class="track ${t.id===currentId?'current':''}"><div class="num">${i+1}</div><div style="min-width:0"><div class="trackname" title="${esc(t.name)}">${esc(t.title)}</div><div class="trackmeta">${esc(t.artist||t.playlistLabel)} · ${fmt(t.duration)}</div></div><div class="trackright">${t.bpm?`<span class="bpm">${t.bpm} BPM</span>`:`<span class="bpm" title="BPM unavailable">— BPM</span>`}<button class="mini" data-play="${t.id}" title="Play track">▶</button><button class="mini" data-add="${t.id}" title="Add to queue">＋</button></div></div>`).join('');
   list.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.play))queue.push(b.dataset.play);playTrack(b.dataset.play)});
   list.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.add)){queue.push(b.dataset.add);renderQueue();say('Added to queue.')}else say('That track is already in the queue.')});
 }
@@ -874,8 +940,10 @@ async function estimateBpm(t){
 }
 // EVENT HANDLERS: Wire up buttons, inputs, and audio playback events.
 $('addFiles').onclick=()=>$('fileInput').click();$('chooseFolder').onclick=()=>$('folderInput').click();
-$('fileInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
-$('folderInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('fileInput').onchange=e=>{addFiles(e.target.files, false);e.target.value=''};
+$('folderInput').onchange=e=>{addFiles(e.target.files, true);e.target.value=''};
+// Changing the playlist changes both the visible library and the playback queue.
+$('playlistSelect').onchange=()=>{makeQueue();renderLibrary()};
 $('filter').onchange=()=>{$('rangeFields').classList.toggle('hidden',$('filter').value!=='range')};
 $('applyRules').onclick=()=>makeQueue();
 $('clearFilters').onclick=()=>{$('filter').value='all';$('rangeFields').classList.add('hidden');makeQueue()};
