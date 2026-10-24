@@ -15,6 +15,8 @@
   4. Playback logic: look for the PLAYER and PLAYBACK SETTINGS JS comments.
   5. BPM detection: look for BPM METADATA and BPM ESTIMATION comments.
   6. Folder playlists: see FOLDER PLAYLISTS and selectedTracks() in JavaScript.
+  7. Persistent preferences and BPM cache: see SESSION STORAGE in JavaScript.
+  8. Forced BPM recalculation: see REANALYZE BPM in JavaScript.
 
   No dependencies, accounts, or external scripts are required.
 -->
@@ -658,7 +660,7 @@ input[type=checkbox] {
       <div class="panelhead"><h2>Your library</h2><div class="library-actions"><button id="addFiles">＋ Add files</button><button id="chooseFolder" class="primary">Choose folder</button></div></div>
       <input id="fileInput" type="file" accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg,.aac,.opus" multiple class="hidden">
       <input id="folderInput" type="file" webkitdirectory directory multiple class="hidden">
-      <div class="folder"><div><strong>Bring your music in</strong><p>Choose a music folder with subfolders. Each subfolder becomes a playlist. Nothing is uploaded.</p></div><span style="font-size:25px">▤</span></div>
+      <div class="folder"><div><strong>Bring your music in</strong><p>Choose a music folder with subfolders. Playlists are automatic. Re-select folders after reopening; saved BPM values are reused.</p></div><span style="font-size:25px">▤</span></div>
       <!-- PLAYLIST LIBRARY: Folders and subfolders become selectable playlists. -->
       <div class="field playlist-picker">
         <label for="playlistSelect">Play from</label>
@@ -676,6 +678,11 @@ input[type=checkbox] {
         <div class="field full"><label class="checkline"><input id="estimate" type="checkbox" checked> Estimate missing BPM from audio</label></div>
       </div>
       <div class="modegrid"><button id="applyRules" class="primary">Apply to queue</button><button id="clearFilters">Clear BPM filter</button></div>
+      <div class="rowline" style="margin-top:10px;flex-wrap:wrap">
+        <button id="reanalyzeBpm" class="primary" title="Recalculate BPM for every track in the selected playlist, even if it has a BPM tag or cached estimate">↻ Reanalyze BPM</button>
+        <button id="clearBpmCache" class="ghost">Clear saved BPM estimates</button>
+        <span class="small muted">Settings and BPM estimates are stored in this browser.</span>
+      </div>
       <div id="status" class="notice" role="status" aria-live="polite">Choose a folder to get started.</div>
       <div class="divider"></div>
       <div class="panelhead"><h2>Library tracks</h2><span class="small muted" id="libraryLabel">0 tracks</span></div>
@@ -763,6 +770,93 @@ async function readBpmTag(file){ // scan ID3, then common text metadata in a bou
     const txt=new TextDecoder('latin1').decode(buf);const m=txt.match(/(?:TBPM|BPM|TEMPO)[^\x20-\x7e]{0,8}(\d{2,3}(?:\.\d+)?)/i);if(m){let n=+m[1];if(n>=30&&n<=300)return Math.round(n)}
   }catch(e){}return null;
 }
+// SESSION STORAGE
+// localStorage holds small settings. IndexedDB holds cached BPM estimates.
+// No audio files are uploaded or stored. Browsers still require folder selection
+// after reopening this HTML file; file permissions are not retained here.
+const SETTINGS_KEY = 'local-frequency-settings-v1';
+const BPM_DB_NAME = 'local-frequency-bpm-cache-v1';
+let bpmDatabasePromise;
+function openBpmDatabase() {
+  if (!('indexedDB' in window)) return Promise.resolve(null);
+  if (!bpmDatabasePromise) bpmDatabasePromise = new Promise(resolve => {
+    try {
+      const request = indexedDB.open(BPM_DB_NAME, 1);
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('estimates'))
+          request.result.createObjectStore('estimates');
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch (_) { resolve(null); }
+  });
+  return bpmDatabasePromise;
+}
+function bpmCacheKey(file) {
+  // Relative path + size + modification date identifies an unchanged file.
+  // Include a small sample of file content below for better change detection.
+  return [file.webkitRelativePath || file.name, file.size, file.lastModified].join('|');
+}
+async function getCachedBpm(file) {
+  const db = await openBpmDatabase();
+  if (!db) return null;
+  return new Promise(resolve => {
+    try {
+      const request = db.transaction('estimates', 'readonly')
+        .objectStore('estimates').get(bpmCacheKey(file));
+      request.onsuccess = () => resolve(request.result?.bpm || null);
+      request.onerror = () => resolve(null);
+    } catch (_) { resolve(null); }
+  });
+}
+async function storeCachedBpm(file, bpm) {
+  const db = await openBpmDatabase();
+  if (!db || !bpm) return;
+  try {
+    const tx = db.transaction('estimates', 'readwrite');
+    tx.objectStore('estimates').put({ bpm, savedAt: Date.now() }, bpmCacheKey(file));
+  } catch (_) {}
+}
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      mode: $('mode').value, filter: $('filter').value,
+      threshold: $('threshold').value, minBpm: $('minBpm').value,
+      maxBpm: $('maxBpm').value, estimate: $('estimate').checked,
+      volume: $('volume').value, speed: $('playbackSpeed').value,
+      shuffle, repeatOne
+    }));
+  } catch (_) {}
+}
+function restoreSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    for (const key of ['mode', 'filter', 'threshold', 'minBpm', 'maxBpm']) {
+      if (saved[key] != null && $(key)) $(key).value = saved[key];
+    }
+    if (typeof saved.estimate === 'boolean') $('estimate').checked = saved.estimate;
+    if (saved.volume != null) $('volume').value = saved.volume;
+    if (saved.speed != null) $('playbackSpeed').value = saved.speed;
+    shuffle = !!saved.shuffle;
+    repeatOne = !!saved.repeatOne;
+    audio.volume = Number($('volume').value);
+    audio.playbackRate = Number($('playbackSpeed').value);
+    $('volumeLabel').textContent = Math.round(audio.volume * 100) + '%';
+    $('rangeFields').classList.toggle('hidden', $('filter').value !== 'range');
+    renderNow();
+  } catch (_) {}
+}
+function watchSettings() {
+  for (const key of ['mode','filter','threshold','minBpm','maxBpm',
+    'estimate','volume','playbackSpeed']) {
+    $(key).addEventListener('change', saveSettings);
+    $(key).addEventListener('input', saveSettings);
+  }
+  $('shuffleToggle').addEventListener('click', saveSettings);
+  $('repeatToggle').addEventListener('click', saveSettings);
+}
+
 // LIBRARY IMPORT: Load local files, read tags, and start BPM analysis.
 // FOLDER PLAYLISTS
 // Each imported root gets a unique ID, so identically named subfolders remain distinct.
@@ -810,7 +904,12 @@ async function addFiles(files, fromFolder = false){
     const t={id:id(),file,name:nameFromFile(file),title:nameFromFile(file),artist:'',
       rootId,relativePath,playlistKey:rootId+'::'+folder,playlistLabel:folder,
       bpm:null,duration:0,url:null,estimateTried:false,estimating:false};
-    t.bpm=await readBpmTag(file);
+    t.bpm = await readBpmTag(file);
+    // Only use a cached estimate if there is no embedded BPM tag.
+    if (!t.bpm) {
+      t.bpm = await getCachedBpm(file);
+      if (t.bpm) t.estimateTried = true;
+    }
     library.push(t);added++;
   }
   renderPlaylists();
@@ -915,8 +1014,10 @@ function renderAll(){renderStats();renderLibrary();renderQueue();renderNow()}
 function moveQueue(id,delta){let i=queue.indexOf(id),j=i+delta;if(i<0||j<0||j>=queue.length)return;[queue[i],queue[j]]=[queue[j],queue[i]];shuffleBag=[];renderQueue()}
 // BPM ESTIMATION: Estimate tempo locally using audio waveform periodicity.
 // This is approximate and can produce half-time/double-time readings.
-async function estimateBpm(t){
-  if(t.bpm||t.estimating||t.estimateTried)return;
+async function estimateBpm(t, force = false){
+  // force=true ignores the current BPM (including tags and cached values).
+  if(t.estimating || (!force && (t.bpm || t.estimateTried)))return;
+  if(force) t.bpm = null;
   t.estimating=true;t.estimateTried=true;renderLibrary();renderQueue();renderNow();
   try{
     const C=window.AudioContext||window.webkitAudioContext;if(!C)throw Error('Web Audio unavailable');
@@ -935,10 +1036,50 @@ async function estimateBpm(t){
     let bestLag=0,best=-Infinity;for(let lag=lo;lag<=hi;lag++){let sum=0;for(let i=0;i<smooth.length-lag;i++)sum+=smooth[i]*smooth[i+lag];if(sum>best){best=sum;bestLag=lag}}
     if(bestLag>0){let bpm=Math.round(60/(bestLag*.01));if(bpm<60)bpm*=2;if(bpm>180)bpm=Math.round(bpm/2);if(bpm>=30&&bpm<=300)t.bpm=bpm}
   }catch(e){/* Some codecs cannot be decoded by this browser; BPM remains unknown. */}
+  if (t.bpm) await storeCachedBpm(t.file, t.bpm);
   t.estimating=false;renderStats();renderLibrary();renderQueue();renderNow();
   if(t.bpm&&($('mode').value==='fast'||$('mode').value==='slow'||$('filter').value!=='all')){const idx=queue.indexOf(t.id);if(idx>=0){queue=sortByMode(queue,$('mode').value);renderQueue()}}
 }
+// REANALYZE BPM: Recalculate all tracks in the currently selected folder playlist.
+// This deliberately overrides tagged BPM and previously cached estimates.
+// Run sequentially to avoid decoding many large audio files simultaneously.
+let reanalysisRunning = false;
+async function reanalyzeSelectedPlaylist() {
+  if (reanalysisRunning) return;
+  const tracks = selectedTracks();
+  if (!tracks.length) { say('Select a folder containing music first.'); return; }
+  reanalysisRunning = true;
+  const button = $('reanalyzeBpm');
+  button.disabled = true;
+  let completed = 0;
+  try {
+    for (const track of tracks) {
+      // Wait for any existing background analysis to finish before forcing a new pass.
+      while (track.estimating) await new Promise(resolve => setTimeout(resolve, 150));
+      say(`Reanalyzing BPM: ${completed + 1} of ${tracks.length} — ${track.name}`);
+      await estimateBpm(track, true);
+      completed++;
+    }
+    // Refresh BPM-based filters and ordering after all estimates are updated.
+    makeQueue();
+    say(`BPM reanalysis finished for ${completed} track(s) in the selected playlist.`);
+  } finally {
+    reanalysisRunning = false;
+    button.disabled = false;
+  }
+}
 // EVENT HANDLERS: Wire up buttons, inputs, and audio playback events.
+$('reanalyzeBpm').onclick = reanalyzeSelectedPlaylist;
+$('clearBpmCache').onclick = async () => {
+  const db = await openBpmDatabase();
+  if (!db) { say('BPM cache is unavailable in this browser.'); return; }
+  try {
+    const tx = db.transaction('estimates', 'readwrite');
+    tx.objectStore('estimates').clear();
+    tx.oncomplete = () => say('Saved BPM estimates cleared. Reimport files to analyze them again.');
+    tx.onerror = () => say('Could not clear the BPM cache.');
+  } catch (_) { say('Could not clear the BPM cache.'); }
+};
 $('addFiles').onclick=()=>$('fileInput').click();$('chooseFolder').onclick=()=>$('folderInput').click();
 $('fileInput').onchange=e=>{addFiles(e.target.files, false);e.target.value=''};
 $('folderInput').onchange=e=>{addFiles(e.target.files, true);e.target.value=''};
@@ -977,6 +1118,9 @@ audio.addEventListener('timeupdate',()=>{if(!seeking&&Number.isFinite(audio.dura
 audio.addEventListener('play',renderNow);audio.addEventListener('pause',renderNow);
 audio.addEventListener('ended',()=>{if(repeatOne){audio.currentTime=0;audio.play();return}playNext()});
 audio.addEventListener('error',()=>{if(currentId)say('This audio format could not be played by your browser. Try MP3, WAV, or another supported format.')});
+// Restore preferences on startup, then save any later changes.
+restoreSettings();
+watchSettings();
 })();
 </script>
 </body>
