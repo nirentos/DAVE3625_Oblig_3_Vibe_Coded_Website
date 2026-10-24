@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local Frequency — Music Player</title>
+<style>
+:root{color-scheme:dark;--bg:#101411;--panel:#181f1a;--panel2:#202a23;--line:#303b33;--text:#edf4ed;--muted:#9ba99e;--green:#a7e6bd;--green2:#4d9c70;--orange:#f1c27d}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% 0%,#23352a 0,transparent 40%),var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:9px 12px;transition:.15s}button:hover{border-color:var(--green);transform:translateY(-1px)}button:disabled{opacity:.35;cursor:not-allowed;transform:none}button.primary{background:var(--green);color:#132019;border-color:var(--green);font-weight:750}button.ghost{background:transparent}button.active{border-color:var(--green);color:var(--green)}input,select{background:#111713;border:1px solid var(--line);border-radius:9px;color:var(--text);padding:9px;min-width:0}input[type=range]{padding:0;accent-color:var(--green);cursor:pointer}input[type=checkbox]{accent-color:var(--green)}
+.wrap{max-width:1280px;margin:auto;padding:28px 24px 50px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:25px}.brand{display:flex;gap:13px;align-items:center}.logo{height:48px;width:48px;border-radius:14px;background:#294636;color:var(--green);display:grid;place-items:center;font-size:25px}.eyebrow{font-size:11px;letter-spacing:.17em;color:var(--green);font-weight:800}.brand h1{font-size:21px;margin:2px 0 0;letter-spacing:.04em}.tagline{color:var(--muted);font-size:13px}.localtag{border:1px solid #456b51;color:var(--green);border-radius:30px;padding:6px 10px;font-size:11px;letter-spacing:.12em;font-weight:800}
+.grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(360px,.95fr);gap:18px;align-items:start}.panel{background:linear-gradient(145deg,rgba(29,38,31,.96),rgba(21,27,23,.97));border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0;box-shadow:0 15px 50px #0002}.panelhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:17px}.panelhead h2{font-size:16px;margin:0}.muted{color:var(--muted)}.small{font-size:12px}.library-actions{display:flex;gap:8px;flex-wrap:wrap}.folder{padding:19px;border:1px dashed #536657;background:#141b16;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px}.folder strong{display:block}.folder p{margin:3px 0 0;color:var(--muted);font-size:12px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:15px 0}.stat{background:#111713;border:1px solid #29342c;border-radius:12px;padding:12px}.stat b{font-size:20px;display:block}.stat span{font-size:11px;color:var(--muted)}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:12px;color:var(--muted)}.field.full{grid-column:1/-1}.rowline{display:flex;gap:8px;align-items:center}.rowline>*{min-width:0}.rowline input[type=number]{width:88px}.checkline{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}.modegrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}.modegrid button{min-height:42px}.divider{height:1px;background:var(--line);margin:18px 0}.tracklist{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:12px}.track{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:9px;align-items:center;padding:10px 11px;border-bottom:1px solid #29332b}.track:last-child{border-bottom:0}.track:hover{background:#ffffff06}.track.current{background:#25423177}.track .num{font-size:11px;color:var(--muted);text-align:center}.trackname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:650;font-size:13px}.trackmeta{font-size:11px;color:var(--muted);margin-top:2px}.trackright{display:flex;gap:7px;align-items:center}.bpm{font-size:11px;color:var(--green);background:#20372a;border-radius:6px;padding:4px 6px;white-space:nowrap}.mini{padding:5px 7px;border-radius:7px;font-size:12px}
+.now{display:flex;gap:15px;align-items:center}.cover{width:100px;height:100px;flex-shrink:0;border-radius:16px;background:linear-gradient(135deg,#355642,#17271d 70%);display:grid;place-items:center;color:var(--green);font-size:42px;border:1px solid #42614a}.nowtitle{font-size:20px;font-weight:750;overflow-wrap:anywhere}.nowartist{font-size:13px;color:var(--muted);margin-top:4px}.pill{display:inline-block;font-size:11px;padding:4px 8px;border:1px solid var(--line);border-radius:30px;margin-top:9px;color:var(--green)}
+.seek{margin:22px 0 8px}.times{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.seek input{width:100%;margin:6px 0}.playerbuttons{display:flex;align-items:center;justify-content:center;gap:11px;margin:14px 0 17px}.playerbuttons button{border:0;background:transparent;font-size:20px;padding:8px 10px}.playerbuttons .play{width:54px;height:54px;background:var(--green);color:#122017;border-radius:50%;font-size:21px;font-weight:800}.volume{display:flex;align-items:center;gap:11px;margin:0 auto;max-width:340px}.volume input{flex:1}.queueheader{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.queueheader h2{margin:0;font-size:16px}.queue{max-height:365px;overflow:auto}.qitem{display:grid;grid-template-columns:25px minmax(0,1fr) auto;align-items:center;gap:8px;padding:10px 7px;border-bottom:1px solid #29332b}.qitem.dragging{opacity:.4}.qitem.dragover{border-top:2px solid var(--green)}.drag{color:#718074;cursor:grab;text-align:center}.qtitle{font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.qmeta{font-size:11px;color:var(--muted)}.qactions{display:flex;gap:5px}.qactions button{padding:5px 7px;font-size:11px}.empty{padding:28px 12px;text-align:center;color:var(--muted);font-size:13px}.footer{margin-top:18px;font-size:11px;color:var(--muted);line-height:1.6}.notice{margin-top:12px;color:var(--orange);font-size:12px;min-height:17px}.hidden{display:none!important}
+@media(max-width:900px){.grid{grid-template-columns:1fr}.wrap{padding:20px 14px 35px}.panel{padding:16px}.top{align-items:flex-start}.folder{align-items:flex-start;flex-direction:column}.nowtitle{font-size:17px}}
+@media(max-width:420px){.controls{grid-template-columns:1fr}.field.full{grid-column:auto}.cover{width:78px;height:78px}.nowtitle{font-size:15px}.stats{gap:5px}.stat{padding:9px}.track{grid-template-columns:20px minmax(0,1fr) auto}.localtag{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><div class="logo">♫</div><div><div class="eyebrow">LOCAL / FREQUENCY</div><h1>Local Music Player</h1><div class="tagline">Your library. Your rules.</div></div></div>
+    <div class="localtag">● RUNS LOCALLY</div>
+  </header>
+  <main class="grid">
+    <section class="panel">
+      <div class="panelhead"><h2>Your library</h2><div class="library-actions"><button id="addFiles">＋ Add files</button><button id="chooseFolder" class="primary">Choose folder</button></div></div>
+      <input id="fileInput" type="file" accept="audio/*,.mp3,.flac,.wav,.m4a,.ogg,.aac,.opus" multiple class="hidden">
+      <input id="folderInput" type="file" webkitdirectory directory multiple class="hidden">
+      <div class="folder"><div><strong>Bring your music in</strong><p>Choose a folder or select multiple audio files. Nothing is uploaded.</p></div><span style="font-size:25px">▤</span></div>
+      <div class="stats"><div class="stat"><b id="trackCount">0</b><span>TRACKS</span></div><div class="stat"><b id="knownBpm">0</b><span>BPM KNOWN</span></div><div class="stat"><b id="totalTime">0m</b><span>LIBRARY LENGTH</span></div></div>
+      <div class="divider"></div>
+      <div class="panelhead"><h2>Playback rules</h2><span class="small muted">Build your queue</span></div>
+      <div class="controls">
+        <div class="field full"><label for="mode">Playback order</label><select id="mode"><option value="custom">Custom order</option><option value="fast">Fast → slow (BPM)</option><option value="slow">Slow → fast (BPM)</option><option value="random">Shuffle · no repeats</option></select></div>
+        <div class="field"><label for="filter">BPM filter</label><select id="filter"><option value="all">All tracks</option><option value="above">Above BPM</option><option value="below">Below BPM</option><option value="range">BPM range</option></select></div>
+        <div class="field"><label for="threshold">BPM threshold</label><input id="threshold" type="number" min="1" max="400" value="120"></div>
+        <div class="field full hidden" id="rangeFields"><label>BPM range (inclusive)</label><div class="rowline"><input id="minBpm" type="number" min="1" max="400" value="100" aria-label="Minimum BPM"><span class="muted">to</span><input id="maxBpm" type="number" min="1" max="400" value="140" aria-label="Maximum BPM"></div></div>
+        <div class="field full"><label class="checkline"><input id="estimate" type="checkbox" checked> Estimate missing BPM from audio</label></div>
+      </div>
+      <div class="modegrid"><button id="applyRules" class="primary">Apply to queue</button><button id="clearFilters">Clear BPM filter</button></div>
+      <div id="status" class="notice" role="status" aria-live="polite">Choose a folder to get started.</div>
+      <div class="divider"></div>
+      <div class="panelhead"><h2>Library tracks</h2><span class="small muted" id="libraryLabel">0 tracks</span></div>
+      <div class="tracklist" id="libraryList"><div class="empty">Your tracks will appear here.</div></div>
+      <div class="footer">BPM tags are read where available. Missing BPM values can be estimated locally in your browser; analysis may take time and estimates are not always exact. Audio support depends on your browser.</div>
+    </section>
+    <section class="panel">
+      <div class="panelhead"><h2>Now playing</h2><span class="small muted" id="playState">READY</span></div>
+      <div class="now">
+        <div class="cover" id="cover">♫</div>
+        <div style="min-width:0;flex:1"><div class="nowtitle" id="nowTitle">Nothing playing yet</div><div class="nowartist" id="nowArtist">Choose music from your library</div><div class="pill" id="nowBpm">BPM —</div></div>
+      </div>
+      <div class="seek"><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek through track"><div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div></div>
+      <div class="playerbuttons">
+        <button id="shuffleToggle" title="Toggle shuffle" aria-label="Toggle shuffle">⤨</button>
+        <button id="previous" title="Previous track" aria-label="Previous track">◀|</button>
+        <button id="playPause" class="play" title="Play" aria-label="Play">▶</button>
+        <button id="next" title="Next track" aria-label="Next track">|▶</button>
+        <button id="repeatToggle" title="Repeat current track" aria-label="Repeat current track">↻</button>
+      </div>
+      <div class="volume"><span class="muted" title="Volume">◖))</span><input id="volume" type="range" min="0" max="1" step=".01" value=".75" aria-label="Volume"><span class="small" id="volumeLabel">75%</span></div>
+      <audio id="audio" preload="metadata"></audio>
+      <div class="divider"></div>
+      <div class="queueheader"><h2>Up next</h2><span class="small muted" id="queueCount">0 tracks</span></div>
+      <div id="queue" class="queue"><div class="empty">Your queue is empty.</div></div>
+      <div class="modegrid"><button id="clearQueue">Clear queue</button><button id="rebuildQueue">Rebuild queue</button></div>
+      <div class="footer">Tip: reorder tracks by dragging them in the queue. Use the up/down buttons on touch screens. Selecting a library track adds it to the queue and plays it.</div>
+    </section>
+  </main>
+</div>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const audio = $('audio');
+let library = [], queue = [], currentId = null, shuffle = false, repeatOne = false, dragId = null, objectUrls = new Map(), audioContext = null;
+let history = [], shuffleBag = [], seeking = false;
+const audioExt = /\.(mp3|flac|wav|m4a|aac|ogg|opus|aiff|aif|wma)$/i;
+function id(){return 't'+Math.random().toString(36).slice(2)+Date.now().toString(36)}
+function fmt(s){if(!Number.isFinite(s)||s<0)return '0:00';s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function nameFromFile(f){return f.name.replace(/\.[^.]+$/,'')}
+function trackTitle(t){return t.title||t.name}
+function getTrack(id){return library.find(t=>t.id===id)}
+function say(s){$('status').textContent=s}
+function parseId3Bpm(buf){ // ID3v2 TBPM text frame (MP3)
+  try{
+    const b=new Uint8Array(buf); if(b.length<10||String.fromCharCode(...b.slice(0,3))!=='ID3')return null;
+    const ver=b[3], size=(b[6]<<21)|(b[7]<<14)|(b[8]<<7)|b[9];let p=10,end=Math.min(b.length,10+size);
+    while(p+10<=end){let fid=String.fromCharCode(...b.slice(p,p+4));if(!/^[A-Z0-9]{4}$/.test(fid)||fid==='0000')break;
+      let n=ver===4?((b[p+4]<<21)|(b[p+5]<<14)|(b[p+6]<<7)|b[p+7]):((b[p+4]<<24)|(b[p+5]<<16)|(b[p+6]<<8)|b[p+7]);if(n<=0||p+10+n>end)break;
+      if(fid==='TBPM'){let raw=new TextDecoder('latin1').decode(b.slice(p+11,p+10+n)).replace(/\0/g,'').trim();let m=raw.match(/\d+(?:\.\d+)?/);if(m){let v=Number(m[0]);if(v>=30&&v<=300)return Math.round(v)}}
+      p+=10+n;
+    }
+  }catch(e){} return null;
+}
+async function readBpmTag(file){ // scan ID3, then common text metadata in a bounded leading chunk
+  try{let buf=await file.slice(0,Math.min(file.size,1024*1024)).arrayBuffer();let bpm=parseId3Bpm(buf);if(bpm)return bpm;
+    // Search plain text metadata patterns for BPM/tempo. Does not decode every container format.
+    const txt=new TextDecoder('latin1').decode(buf);const m=txt.match(/(?:TBPM|BPM|TEMPO)[^\x20-\x7e]{0,8}(\d{2,3}(?:\.\d+)?)/i);if(m){let n=+m[1];if(n>=30&&n<=300)return Math.round(n)}
+  }catch(e){}return null;
+}
+async function addFiles(files){
+  const arr=[...files].filter(f=>audioExt.test(f.name)||f.type.startsWith('audio/'));
+  if(!arr.length){say('No supported audio files found.');return}
+  let added=0;
+  for(const file of arr){
+    if(library.some(t=>t.file.name===file.name&&t.file.size===file.size&&t.file.lastModified===file.lastModified))continue;
+    const t={id:id(),file,name:nameFromFile(file),title:nameFromFile(file),artist:'',bpm:null,duration:0,url:null,estimateTried:false,estimating:false};
+    t.bpm=await readBpmTag(file);
+    library.push(t);added++;
+  }
+  if(!queue.length)queue=library.map(t=>t.id);
+  renderAll();say(`Added ${added} track${added===1?'':'s'}. ${library.filter(t=>!t.bpm).length} track(s) need BPM analysis or have no BPM tag.`);
+  if($('estimate').checked) library.filter(t=>!t.bpm).forEach(t=>estimateBpm(t));
+}
+function sortByMode(ids,mode){
+  const tracks=ids.map(getTrack).filter(Boolean);
+  if(mode==='fast')tracks.sort((a,b)=>(b.bpm||0)-(a.bpm||0)||a.name.localeCompare(b.name));
+  if(mode==='slow')tracks.sort((a,b)=>(a.bpm||999)-(b.bpm||999)||a.name.localeCompare(b.name));
+  return tracks.map(t=>t.id)
+}
+function filteredTracks(){
+  let tracks=library.slice();const f=$('filter').value,threshold=Number($('threshold').value)||120,min=Number($('minBpm').value)||1,max=Number($('maxBpm').value)||400;
+  if(f==='above')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>threshold);
+  if(f==='below')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm<threshold);
+  if(f==='range')tracks=tracks.filter(t=>t.bpm!=null&&t.bpm>=Math.min(min,max)&&t.bpm<=Math.max(min,max));
+  return tracks;
+}
+function makeQueue(){let ids=filteredTracks().map(t=>t.id),mode=$('mode').value;
+  if(mode==='fast'||mode==='slow')ids=sortByMode(ids,mode);
+  if(mode==='random')ids=shuffleIds(ids);
+  queue=ids;shuffleBag=[];renderQueue();renderLibrary();
+  if(currentId&&!queue.includes(currentId))say('Current track is outside the filtered queue; it can finish playing.');
+  else say(`Queue built: ${queue.length} track(s).`);
+}
+function shuffleIds(ids){let a=ids.slice();for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function activeQueue(){return queue.filter(id=>getTrack(id))}
+function currentIndex(){return queue.indexOf(currentId)}
+function nextId(){
+  const q=activeQueue();if(!q.length)return null;
+  if(repeatOne&&currentId)return currentId;
+  if(shuffle||$('mode').value==='random'){
+    if(!shuffleBag.length)shuffleBag=shuffleIds(q.filter(x=>x!==currentId));
+    return shuffleBag.shift()||null;
+  }
+  let idx=q.indexOf(currentId);if(idx<0)return q[0];return q[idx+1]||null;
+}
+function prevId(){if(history.length>1){history.pop();return history.pop()}const q=activeQueue(),i=q.indexOf(currentId);return q[Math.max(0,i-1)]||null}
+async function playTrack(trackId,autoplay=true){
+  const t=getTrack(trackId);if(!t)return;
+  if(currentId&&currentId!==trackId)history.push(currentId);
+  currentId=trackId;
+  if(!t.url){t.url=URL.createObjectURL(t.file);objectUrls.set(t.id,t.url)}
+  if(audio.src!==t.url){audio.src=t.url;audio.load()}
+  renderAll();
+  if(autoplay){try{await audio.play();$('playState').textContent='PLAYING'}catch(e){$('playState').textContent='PAUSED';say('Press play to start audio playback.')}}
+  else $('playState').textContent='READY';
+  if($('estimate').checked&&!t.bpm&&!t.estimateTried)estimateBpm(t);
+}
+function playNext(){const n=nextId();if(n)playTrack(n);else if(activeQueue().length===0)say('Queue is empty. Apply your playback rules or add tracks.')}
+function playPrevious(){if(audio.currentTime>3){audio.currentTime=0;return}const p=prevId();if(p)playTrack(p)}
+function renderLibrary(){
+  const list=$('libraryList');$('libraryLabel').textContent=`${library.length} track${library.length===1?'':'s'}`;
+  if(!library.length){list.innerHTML='<div class="empty">Your tracks will appear here.</div>';return}
+  list.innerHTML=library.map((t,i)=>`<div class="track ${t.id===currentId?'current':''}"><div class="num">${i+1}</div><div style="min-width:0"><div class="trackname" title="${esc(t.name)}">${esc(t.title)}</div><div class="trackmeta">${esc(t.artist||t.file.name)} · ${fmt(t.duration)}</div></div><div class="trackright">${t.bpm?`<span class="bpm">${t.bpm} BPM</span>`:`<span class="bpm" title="BPM unavailable">— BPM</span>`}<button class="mini" data-play="${t.id}" title="Play track">▶</button><button class="mini" data-add="${t.id}" title="Add to queue">＋</button></div></div>`).join('');
+  list.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.play))queue.push(b.dataset.play);playTrack(b.dataset.play)});
+  list.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.add)){queue.push(b.dataset.add);renderQueue();say('Added to queue.')}else say('That track is already in the queue.')});
+}
+function renderQueue(){
+  const el=$('queue');const q=activeQueue();$('queueCount').textContent=`${q.length} track${q.length===1?'':'s'}`;
+  if(!q.length){el.innerHTML='<div class="empty">Your queue is empty.</div>';return}
+  el.innerHTML=q.map((id,i)=>{const t=getTrack(id);return `<div class="qitem ${id===currentId?'current':''}" draggable="true" data-id="${id}"><div class="drag" title="Drag to reorder">⠿</div><div style="min-width:0;cursor:pointer" data-qplay="${id}"><div class="qtitle">${id===currentId?'♫ ':''}${esc(t.title)}</div><div class="qmeta">${esc(t.artist||t.file.name)} · ${t.bpm?t.bpm+' BPM':'BPM —'} · ${fmt(t.duration)}</div></div><div class="qactions"><button data-up="${id}" title="Move up" ${i===0?'disabled':''}>↑</button><button data-down="${id}" title="Move down" ${i===q.length-1?'disabled':''}>↓</button><button data-remove="${id}" title="Remove">×</button></div></div>`}).join('');
+  el.querySelectorAll('[data-qplay]').forEach(x=>x.onclick=()=>playTrack(x.dataset.qplay));
+  el.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>moveQueue(b.dataset.up,-1));
+  el.querySelectorAll('[data-down]').forEach(b=>b.onclick=()=>moveQueue(b.dataset.down,1));
+  el.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{queue=queue.filter(x=>x!==b.dataset.remove);shuffleBag=shuffleBag.filter(x=>x!==b.dataset.remove);renderQueue();if(currentId===b.dataset.remove)say('Current track removed from queue. Playback can continue, but it will not be selected by next.')});
+  el.querySelectorAll('.qitem').forEach(item=>{
+    item.addEventListener('dragstart',e=>{dragId=item.dataset.id;item.classList.add('dragging');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',dragId)});
+    item.addEventListener('dragend',()=>{dragId=null;el.querySelectorAll('.qitem').forEach(x=>x.classList.remove('dragging','dragover'))});
+    item.addEventListener('dragover',e=>{e.preventDefault();item.classList.add('dragover')});
+    item.addEventListener('dragleave',()=>item.classList.remove('dragover'));
+    item.addEventListener('drop',e=>{e.preventDefault();item.classList.remove('dragover');const from=e.dataTransfer.getData('text/plain')||dragId;if(from&&from!==item.dataset.id){const a=queue.indexOf(from),b=queue.indexOf(item.dataset.id);if(a>=0&&b>=0){const [v]=queue.splice(a,1);queue.splice(b,0,v);shuffleBag=[];renderQueue()}}});
+  });
+}
+function renderNow(){
+  const t=getTrack(currentId);$('nowTitle').textContent=t?trackTitle(t):'Nothing playing yet';$('nowArtist').textContent=t?(t.artist||t.file.name):'Choose music from your library';$('nowBpm').textContent=t?(t.bpm?`${t.bpm} BPM`:t.estimating?'Estimating BPM…':'BPM unavailable'):'BPM —';
+  $('playPause').textContent=audio.paused?'▶':'Ⅱ';$('playPause').setAttribute('aria-label',audio.paused?'Play':'Pause');$('playState').textContent=audio.paused?'PAUSED':'PLAYING';
+  $('previous').disabled=!activeQueue().length;$('next').disabled=!activeQueue().length;$('shuffleToggle').classList.toggle('active',shuffle||$('mode').value==='random');$('repeatToggle').classList.toggle('active',repeatOne);
+}
+function renderStats(){
+  $('trackCount').textContent=library.length;$('knownBpm').textContent=library.filter(t=>t.bpm).length;
+  const secs=library.reduce((n,t)=>n+(t.duration||0),0);$('totalTime').textContent=secs>=3600?Math.floor(secs/3600)+'h '+Math.floor(secs%3600/60)+'m':Math.floor(secs/60)+'m';
+}
+function renderAll(){renderStats();renderLibrary();renderQueue();renderNow()}
+function moveQueue(id,delta){let i=queue.indexOf(id),j=i+delta;if(i<0||j<0||j>=queue.length)return;[queue[i],queue[j]]=[queue[j],queue[i]];shuffleBag=[];renderQueue()}
+async function estimateBpm(t){
+  if(t.bpm||t.estimating||t.estimateTried)return;
+  t.estimating=true;t.estimateTried=true;renderLibrary();renderQueue();renderNow();
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;if(!C)throw Error('Web Audio unavailable');
+    audioContext ||= new C();
+    const buf=await t.file.arrayBuffer();
+    // Decode locally; cap duration after decode for CPU/memory sanity.
+    const decoded=await audioContext.decodeAudioData(buf.slice(0));
+    const ch=decoded.getChannelData(0),sr=decoded.sampleRate;
+    const seconds=Math.min(decoded.duration,90),step=Math.max(1,Math.floor(sr/11025)),hop=Math.floor(sr*.01);
+    const env=[];let prev=0;
+    for(let start=0;start<seconds*sr;start+=hop){let sum=0,n=0,end=Math.min(ch.length,start+hop);for(let i=start;i<end;i+=step){const v=ch[i];sum+=Math.abs(v-prev);prev=v;n++}env.push(n?sum/n:0)}
+    // Autocorrelation on the amplitude-change envelope, searching 60–180 BPM.
+    const smooth=env.map((v,i)=>{let s=0,n=0;for(let j=Math.max(0,i-2);j<=Math.min(env.length-1,i+2);j++){s+=env[j];n++}return s/n});
+    const mean=smooth.reduce((a,b)=>a+b,0)/Math.max(1,smooth.length);for(let i=0;i<smooth.length;i++)smooth[i]-=mean;
+    const lo=Math.max(1,Math.floor(60/(180*.01))),hi=Math.min(Math.floor(60/(60*.01)),Math.floor(smooth.length/2));
+    let bestLag=0,best=-Infinity;for(let lag=lo;lag<=hi;lag++){let sum=0;for(let i=0;i<smooth.length-lag;i++)sum+=smooth[i]*smooth[i+lag];if(sum>best){best=sum;bestLag=lag}}
+    if(bestLag>0){let bpm=Math.round(60/(bestLag*.01));if(bpm<60)bpm*=2;if(bpm>180)bpm=Math.round(bpm/2);if(bpm>=30&&bpm<=300)t.bpm=bpm}
+  }catch(e){/* Some codecs cannot be decoded by this browser; BPM remains unknown. */}
+  t.estimating=false;renderStats();renderLibrary();renderQueue();renderNow();
+  if(t.bpm&&($('mode').value==='fast'||$('mode').value==='slow'||$('filter').value!=='all')){const idx=queue.indexOf(t.id);if(idx>=0){queue=sortByMode(queue,$('mode').value);renderQueue()}}
+}
+$('addFiles').onclick=()=>$('fileInput').click();$('chooseFolder').onclick=()=>$('folderInput').click();
+$('fileInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('folderInput').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('filter').onchange=()=>{$('rangeFields').classList.toggle('hidden',$('filter').value!=='range')};
+$('applyRules').onclick=()=>makeQueue();
+$('clearFilters').onclick=()=>{$('filter').value='all';$('rangeFields').classList.add('hidden');makeQueue()};
+$('mode').onchange=()=>{if($('mode').value==='random'){shuffle=true}makeQueue();renderNow()};
+$('estimate').onchange=()=>{if($('estimate').checked)library.filter(t=>!t.bpm&&!t.estimateTried).forEach(estimateBpm)};
+$('clearQueue').onclick=()=>{queue=[];shuffleBag=[];renderQueue();renderNow();say('Queue cleared.')};
+$('rebuildQueue').onclick=()=>makeQueue();
+$('playPause').onclick=async()=>{if(!currentId){if(!queue.length)makeQueue();if(queue.length)await playTrack(queue[0]);return}if(audio.paused){try{await audio.play()}catch(e){say('Unable to play this file in the current browser.')}}else audio.pause();renderNow()};
+$('next').onclick=playNext;$('previous').onclick=playPrevious;
+$('shuffleToggle').onclick=()=>{shuffle=!shuffle;$('mode').value=shuffle?'random':'custom';shuffleBag=[];if(shuffle)queue=shuffleIds(queue);renderQueue();renderNow()};
+$('repeatToggle').onclick=()=>{repeatOne=!repeatOne;renderNow()};
+$('volume').oninput=e=>{audio.volume=Number(e.target.value);$('volumeLabel').textContent=Math.round(audio.volume*100)+'%'};
+audio.volume=.75;
+$('seek').oninput=()=>{seeking=true;const d=audio.duration;if(Number.isFinite(d))$('elapsed').textContent=fmt(Number($('seek').value)/1000*d)};
+$('seek').onchange=()=>{if(Number.isFinite(audio.duration))audio.currentTime=Number($('seek').value)/1000*audio.duration;seeking=false};
+audio.addEventListener('loadedmetadata',()=>{const t=getTrack(currentId);if(t&&Number.isFinite(audio.duration)){t.duration=audio.duration;renderStats();renderLibrary();renderQueue()}$('duration').textContent=fmt(audio.duration);$('elapsed').textContent=fmt(audio.currentTime)});
+audio.addEventListener('timeupdate',()=>{if(!seeking&&Number.isFinite(audio.duration)&&audio.duration>0)$('seek').value=audio.currentTime/audio.duration*1000;$('elapsed').textContent=fmt(audio.currentTime);$('duration').textContent=fmt(audio.duration)});
+audio.addEventListener('play',renderNow);audio.addEventListener('pause',renderNow);
+audio.addEventListener('ended',()=>{if(repeatOne){audio.currentTime=0;audio.play();return}playNext()});
+audio.addEventListener('error',()=>{if(currentId)say('This audio format could not be played by your browser. Try MP3, WAV, or another supported format.')});
+})();
+</script>
+</body>
+</html>
