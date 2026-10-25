@@ -667,6 +667,12 @@ input[type=checkbox] {
         <select id="playlistSelect"><option value="__all__">All music (all folders)</option></select>
         <div class="small muted" id="playlistHint">Choose a folder containing subfolders to create playlists automatically.</div>
       </div>
+      <!-- LIBRARY SEARCH: Searches the selected playlist by track and folder name. -->
+      <div class="field" style="margin:12px 0">
+        <label for="librarySearch">Search tracks</label>
+        <input id="librarySearch" type="search" placeholder="Search title, filename, or folder…" autocomplete="off">
+      </div>
+      <label class="checkline" style="margin-bottom:12px"><input id="favoritesOnly" type="checkbox"> Show favorites only ★</label>
       <div class="stats"><div class="stat"><b id="trackCount">0</b><span>TRACKS</span></div><div class="stat"><b id="knownBpm">0</b><span>BPM KNOWN</span></div><div class="stat"><b id="totalTime">0m</b><span>LIBRARY LENGTH</span></div></div>
       <div class="divider"></div>
       <div class="panelhead"><h2>Playback rules</h2><span class="small muted">Build your queue</span></div>
@@ -679,6 +685,7 @@ input[type=checkbox] {
       </div>
       <div class="modegrid"><button id="applyRules" class="primary">Apply to queue</button><button id="clearFilters">Clear BPM filter</button></div>
       <div class="rowline" style="margin-top:10px;flex-wrap:wrap">
+        <button id="cancelAnalysis" class="ghost" title="Stop after the current track">Cancel analysis</button>
         <button id="reanalyzeBpm" class="primary" title="Recalculate BPM for every track in the selected playlist, even if it has a BPM tag or cached estimate">↻ Reanalyze BPM</button>
         <button id="clearBpmCache" class="ghost">Clear saved BPM estimates</button>
         <span class="small muted">Settings and BPM estimates are stored in this browser.</span>
@@ -722,6 +729,18 @@ input[type=checkbox] {
           </select>
         </div>
       </div>
+      <!-- EQUALIZER: Three peaking/shelving filters, connected only once to the audio element. -->
+      <div class="divider"></div>
+      <div class="panelhead"><h2>Equalizer</h2><button id="eqReset" class="ghost">Reset EQ</button></div>
+      <div class="controls">
+        <div class="field"><label for="eqPreset">Preset</label>
+          <select id="eqPreset"><option value="flat">Flat</option><option value="bass">Bass boost</option><option value="vocal">Vocal</option><option value="bright">Bright</option><option value="custom">Custom</option></select>
+        </div>
+        <div class="field"><label class="checkline"><input id="eqEnabled" type="checkbox" checked> Enable EQ</label></div>
+        <div class="field"><label for="eqBass">Bass <span id="eqBassValue">0 dB</span></label><input id="eqBass" type="range" min="-12" max="12" value="0" step="1"></div>
+        <div class="field"><label for="eqMid">Mid <span id="eqMidValue">0 dB</span></label><input id="eqMid" type="range" min="-12" max="12" value="0" step="1"></div>
+        <div class="field"><label for="eqTreble">Treble <span id="eqTrebleValue">0 dB</span></label><input id="eqTreble" type="range" min="-12" max="12" value="0" step="1"></div>
+      </div>
       <audio id="audio" preload="metadata"></audio>
       <div class="divider"></div>
       <div class="queueheader"><h2>Up next</h2><span class="small muted" id="queueCount">0 tracks</span></div>
@@ -743,6 +762,12 @@ let library = [], queue = [], currentId = null, shuffle = false, repeatOne = fal
 let rootImportNumber = 0;
 const ALL_PLAYLISTS = '__all__';
 let history = [], shuffleBag = [], seeking = false;
+// Track preferences use the same stable path/size/mtime identity as the BPM cache.
+const FAVORITES_KEY = 'localFrequencyFavoritesV6';
+let favorites = {};
+try { favorites = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '{}') || {}; } catch (_) {}
+let analysisQueue = [], analysisBusy = false, cancelRequested = false, reanalysisAbort = false;
+let eqContext = null, eqNodes = null;
 const audioExt = /\.(mp3|flac|wav|m4a|aac|ogg|opus|aiff|aif|wma)$/i;
 function id(){return 't'+Math.random().toString(36).slice(2)+Date.now().toString(36)}
 function fmt(s){if(!Number.isFinite(s)||s<0)return '0:00';s=Math.floor(s);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
@@ -795,7 +820,7 @@ function openBpmDatabase() {
 }
 function bpmCacheKey(file) {
   // Relative path + size + modification date identifies an unchanged file.
-  // Include a small sample of file content below for better change detection.
+  // This is metadata-based, not a content hash.
   return [file.webkitRelativePath || file.name, file.size, file.lastModified].join('|');
 }
 async function getCachedBpm(file) {
@@ -825,7 +850,9 @@ function saveSettings() {
       threshold: $('threshold').value, minBpm: $('minBpm').value,
       maxBpm: $('maxBpm').value, estimate: $('estimate').checked,
       volume: $('volume').value, speed: $('playbackSpeed').value,
-      shuffle, repeatOne
+      shuffle, repeatOne,
+      eqEnabled: $('eqEnabled').checked, eqPreset: $('eqPreset').value,
+      eqBass: $('eqBass').value, eqMid: $('eqMid').value, eqTreble: $('eqTreble').value
     }));
   } catch (_) {}
 }
@@ -838,18 +865,22 @@ function restoreSettings() {
     if (typeof saved.estimate === 'boolean') $('estimate').checked = saved.estimate;
     if (saved.volume != null) $('volume').value = saved.volume;
     if (saved.speed != null) $('playbackSpeed').value = saved.speed;
+    for (const key of ['eqPreset','eqBass','eqMid','eqTreble'])
+      if (saved[key] != null) $(key).value = saved[key];
+    if (typeof saved.eqEnabled === 'boolean') $('eqEnabled').checked = saved.eqEnabled;
     shuffle = !!saved.shuffle;
     repeatOne = !!saved.repeatOne;
     audio.volume = Number($('volume').value);
     audio.playbackRate = Number($('playbackSpeed').value);
     $('volumeLabel').textContent = Math.round(audio.volume * 100) + '%';
     $('rangeFields').classList.toggle('hidden', $('filter').value !== 'range');
+    updateEq();
     renderNow();
   } catch (_) {}
 }
 function watchSettings() {
   for (const key of ['mode','filter','threshold','minBpm','maxBpm',
-    'estimate','volume','playbackSpeed']) {
+    'estimate','volume','playbackSpeed','eqEnabled','eqPreset','eqBass','eqMid','eqTreble']) {
     $(key).addEventListener('change', saveSettings);
     $(key).addEventListener('input', saveSettings);
   }
@@ -903,13 +934,12 @@ async function addFiles(files, fromFolder = false){
     const folder = playlistPath(file, rootName);
     const t={id:id(),file,name:nameFromFile(file),title:nameFromFile(file),artist:'',
       rootId,relativePath,playlistKey:rootId+'::'+folder,playlistLabel:folder,
-      bpm:null,duration:0,url:null,estimateTried:false,estimating:false};
-    t.bpm = await readBpmTag(file);
-    // Only use a cached estimate if there is no embedded BPM tag.
-    if (!t.bpm) {
-      t.bpm = await getCachedBpm(file);
-      if (t.bpm) t.estimateTried = true;
-    }
+      bpm:null,duration:0,url:null,estimateTried:false,estimating:false,
+      favorite:!!favorites[bpmCacheKey(file)]};
+    // Saved corrections/estimates take precedence over embedded tags.
+    t.bpm = await getCachedBpm(file);
+    if (t.bpm) t.estimateTried = true;
+    else t.bpm = await readBpmTag(file);
     library.push(t);added++;
   }
   renderPlaylists();
@@ -961,6 +991,7 @@ function nextId(){
 function prevId(){if(history.length>1){history.pop();return history.pop()}const q=activeQueue(),i=q.indexOf(currentId);return q[Math.max(0,i-1)]||null}
 // PLAYER: Switch tracks and start playback.
 async function playTrack(trackId,autoplay=true){
+  initializeEq();eqContext?.resume().catch(()=>{});
   const t=getTrack(trackId);if(!t)return;
   if(currentId&&currentId!==trackId)history.push(currentId);
   currentId=trackId;
@@ -976,10 +1007,34 @@ function playPrevious(){if(audio.currentTime>3){audio.currentTime=0;return}const
 // USER INTERFACE: Draw the library list.
 function renderLibrary(){
   const list=$('libraryList');
-  const visible = selectedTracks();
+  const term = $('librarySearch').value.trim().toLocaleLowerCase();
+  const visible = selectedTracks().filter(t =>
+    (!term || [t.title,t.file.name,t.playlistLabel].some(v=>v.toLocaleLowerCase().includes(term))) &&
+    (!$('favoritesOnly').checked || t.favorite));
   $('libraryLabel').textContent=`${visible.length} track${visible.length===1?'':'s'}`;
   if(!visible.length){list.innerHTML='<div class="empty">Your tracks will appear here.</div>';return}
-  list.innerHTML=visible.map((t,i)=>`<div class="track ${t.id===currentId?'current':''}"><div class="num">${i+1}</div><div style="min-width:0"><div class="trackname" title="${esc(t.name)}">${esc(t.title)}</div><div class="trackmeta">${esc(t.artist||t.playlistLabel)} · ${fmt(t.duration)}</div></div><div class="trackright">${t.bpm?`<span class="bpm">${t.bpm} BPM</span>`:`<span class="bpm" title="BPM unavailable">— BPM</span>`}<button class="mini" data-play="${t.id}" title="Play track">▶</button><button class="mini" data-add="${t.id}" title="Add to queue">＋</button></div></div>`).join('');
+  list.innerHTML=visible.map((t,i)=>`<div class="track ${t.id===currentId?'current':''}"><div class="num">${i+1}</div><div style="min-width:0"><div class="trackname" title="${esc(t.name)}">${esc(t.title)}</div><div class="trackmeta">${esc(t.artist||t.playlistLabel)} · ${fmt(t.duration)}</div></div><div class="trackright"><button class="mini" data-fav="${t.id}" title="${t.favorite?'Remove favorite':'Add favorite'}" aria-label="Toggle favorite">${t.favorite?'★':'☆'}</button><button class="mini" data-bpm="${t.id}" title="Edit BPM (or halve/double)" aria-label="Edit BPM">${t.bpm?t.bpm+' BPM':'— BPM'} ✎</button><button class="mini" data-play="${t.id}" title="Play track">▶</button><button class="mini" data-add="${t.id}" title="Add to queue">＋</button></div></div>`).join('');
+  // BPM editor: prompt allows a value, half, or double. Store corrections in IndexedDB.
+  list.querySelectorAll('[data-bpm]').forEach(b=>b.onclick=async()=>{
+    const t=getTrack(b.dataset.bpm);
+    const answer=prompt(`BPM for ${t.title} (30–300). Type a number, /2 or *2:`,t.bpm||'');
+    if(answer===null)return;
+    const v=answer.trim();
+    let bpm=v==='/2' ? Number(t.bpm)/2 : v==='*2' ? Number(t.bpm)*2 : Number(v);
+    if(!v || !Number.isFinite(bpm) || bpm<30 || bpm>300){say('Enter a BPM between 30 and 300, /2, or *2.');return}
+    t.bpm=Math.round(bpm*10)/10;
+    t.estimateTried=true;
+    await storeCachedBpm(t.file,t.bpm);
+    // Cached manual edits should take precedence over embedded tags on the next import.
+    renderAll();say(`Saved ${t.bpm} BPM for ${t.title}.`);
+  });
+  list.querySelectorAll('[data-fav]').forEach(b=>b.onclick=()=>{
+    const t=getTrack(b.dataset.fav);t.favorite=!t.favorite;
+    const key=bpmCacheKey(t.file);
+    if(t.favorite)favorites[key]=true;else delete favorites[key];
+    try{localStorage.setItem(FAVORITES_KEY,JSON.stringify(favorites))}catch(_){}
+    renderLibrary();
+  });
   list.querySelectorAll('[data-play]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.play))queue.push(b.dataset.play);playTrack(b.dataset.play)});
   list.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{if(!queue.includes(b.dataset.add)){queue.push(b.dataset.add);renderQueue();say('Added to queue.')}else say('That track is already in the queue.')});
 }
@@ -1014,7 +1069,7 @@ function renderAll(){renderStats();renderLibrary();renderQueue();renderNow()}
 function moveQueue(id,delta){let i=queue.indexOf(id),j=i+delta;if(i<0||j<0||j>=queue.length)return;[queue[i],queue[j]]=[queue[j],queue[i]];shuffleBag=[];renderQueue()}
 // BPM ESTIMATION: Estimate tempo locally using audio waveform periodicity.
 // This is approximate and can produce half-time/double-time readings.
-async function estimateBpm(t, force = false){
+async function analyzeBpmNow(t, force = false){
   // force=true ignores the current BPM (including tags and cached values).
   if(t.estimating || (!force && (t.bpm || t.estimateTried)))return;
   if(force) t.bpm = null;
@@ -1040,6 +1095,39 @@ async function estimateBpm(t, force = false){
   t.estimating=false;renderStats();renderLibrary();renderQueue();renderNow();
   if(t.bpm&&($('mode').value==='fast'||$('mode').value==='slow'||$('filter').value!=='all')){const idx=queue.indexOf(t.id);if(idx>=0){queue=sortByMode(queue,$('mode').value);renderQueue()}}
 }
+// ANALYSIS WORKER: One decoded audio file at a time avoids memory spikes.
+// Manual reanalysis jobs take priority; Cancel discards pending jobs.
+function estimateBpm(t, force=false) {
+  if (!force && (t.bpm || t.estimateTried || t.estimating)) return Promise.resolve();
+  return new Promise(resolve=>{
+    if (force) analysisQueue.unshift({t,force,resolve});
+    else if (!analysisQueue.some(j=>j.t===t)) analysisQueue.push({t,force,resolve});
+    else { resolve(); return; }
+    processAnalysisQueue();
+  });
+}
+async function processAnalysisQueue() {
+  if (analysisBusy) return;
+  analysisBusy=true;
+  try {
+    while(analysisQueue.length) {
+      if(cancelRequested) {
+        analysisQueue.splice(0).forEach(job=>job.resolve());
+        cancelRequested=false;break;
+      }
+      const job=analysisQueue.shift();
+      try { await analyzeBpmNow(job.t,job.force); } finally { job.resolve(); }
+      // Yield to user input and painting between large audio decodes.
+      await new Promise(resolve=>setTimeout(resolve,0));
+    }
+  } finally { analysisBusy=false; }
+}
+$('cancelAnalysis').onclick=()=>{
+  reanalysisAbort=true;
+  cancelRequested=true;
+  analysisQueue.splice(0).forEach(job=>job.resolve());
+  say('Queued BPM analysis canceled. The current track will finish.');
+};
 // REANALYZE BPM: Recalculate all tracks in the currently selected folder playlist.
 // This deliberately overrides tagged BPM and previously cached estimates.
 // Run sequentially to avoid decoding many large audio files simultaneously.
@@ -1049,13 +1137,14 @@ async function reanalyzeSelectedPlaylist() {
   const tracks = selectedTracks();
   if (!tracks.length) { say('Select a folder containing music first.'); return; }
   reanalysisRunning = true;
+  reanalysisAbort = false;
   const button = $('reanalyzeBpm');
   button.disabled = true;
   let completed = 0;
   try {
     for (const track of tracks) {
       // Wait for any existing background analysis to finish before forcing a new pass.
-      while (track.estimating) await new Promise(resolve => setTimeout(resolve, 150));
+      if(reanalysisAbort)break;
       say(`Reanalyzing BPM: ${completed + 1} of ${tracks.length} — ${track.name}`);
       await estimateBpm(track, true);
       completed++;
@@ -1065,9 +1154,50 @@ async function reanalyzeSelectedPlaylist() {
     say(`BPM reanalysis finished for ${completed} track(s) in the selected playlist.`);
   } finally {
     reanalysisRunning = false;
+    cancelRequested = false;
     button.disabled = false;
   }
 }
+// EQUALIZER: One MediaElementAudioSourceNode feeds three filters in series.
+// A Web Audio context is initialized on first playback (browser gesture policy).
+function initializeEq() {
+  if(eqNodes)return;
+  try {
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(!C)return;
+    eqContext=new C();
+    const source=eqContext.createMediaElementSource(audio);
+    const bass=eqContext.createBiquadFilter();bass.type='lowshelf';bass.frequency.value=200;
+    const mid=eqContext.createBiquadFilter();mid.type='peaking';mid.frequency.value=1000;mid.Q.value=0.8;
+    const treble=eqContext.createBiquadFilter();treble.type='highshelf';treble.frequency.value=4000;
+    source.connect(bass);bass.connect(mid);mid.connect(treble);treble.connect(eqContext.destination);
+    eqNodes={bass,mid,treble};updateEq();
+  }catch(e){say('Equalizer unavailable in this browser: '+e.message)}
+}
+function updateEq() {
+  const enabled=$('eqEnabled').checked;
+  for(const [key,node] of [['eqBass','bass'],['eqMid','mid'],['eqTreble','treble']]){
+    const value=Number($(key).value);
+    $(key+'Value').textContent=(value>0?'+':'')+value+' dB';
+    if(eqNodes)eqNodes[node].gain.value=enabled?value:0;
+  }
+}
+const eqPresets={flat:[0,0,0],bass:[6,-1,0],vocal:[-2,4,2],bright:[-1,0,5]};
+$('eqPreset').onchange=()=>{
+  const values=eqPresets[$('eqPreset').value];
+  if(values) ['eqBass','eqMid','eqTreble'].forEach((k,i)=>$(k).value=values[i]);
+  updateEq();saveSettings();
+};
+['eqBass','eqMid','eqTreble'].forEach(key=>{
+  $(key).oninput=()=>{$('eqPreset').value='custom';updateEq();saveSettings()};
+});
+$('eqEnabled').onchange=()=>{updateEq();saveSettings()};
+$('eqReset').onclick=()=>{
+  $('eqPreset').value='flat';
+  ['eqBass','eqMid','eqTreble'].forEach(k=>$(k).value=0);
+  updateEq();saveSettings();
+};
+audio.addEventListener('play',()=>{initializeEq();eqContext?.resume().catch(()=>{})});
 // EVENT HANDLERS: Wire up buttons, inputs, and audio playback events.
 $('reanalyzeBpm').onclick = reanalyzeSelectedPlaylist;
 $('clearBpmCache').onclick = async () => {
@@ -1085,6 +1215,8 @@ $('fileInput').onchange=e=>{addFiles(e.target.files, false);e.target.value=''};
 $('folderInput').onchange=e=>{addFiles(e.target.files, true);e.target.value=''};
 // Changing the playlist changes both the visible library and the playback queue.
 $('playlistSelect').onchange=()=>{makeQueue();renderLibrary()};
+$('librarySearch').oninput=renderLibrary;
+$('favoritesOnly').onchange=renderLibrary;
 $('filter').onchange=()=>{$('rangeFields').classList.toggle('hidden',$('filter').value!=='range')};
 $('applyRules').onclick=()=>makeQueue();
 $('clearFilters').onclick=()=>{$('filter').value='all';$('rangeFields').classList.add('hidden');makeQueue()};
@@ -1092,7 +1224,7 @@ $('mode').onchange=()=>{if($('mode').value==='random'){shuffle=true}makeQueue();
 $('estimate').onchange=()=>{if($('estimate').checked)library.filter(t=>!t.bpm&&!t.estimateTried).forEach(estimateBpm)};
 $('clearQueue').onclick=()=>{queue=[];shuffleBag=[];renderQueue();renderNow();say('Queue cleared.')};
 $('rebuildQueue').onclick=()=>makeQueue();
-$('playPause').onclick=async()=>{if(!currentId){if(!queue.length)makeQueue();if(queue.length)await playTrack(queue[0]);return}if(audio.paused){try{await audio.play()}catch(e){say('Unable to play this file in the current browser.')}}else audio.pause();renderNow()};
+$('playPause').onclick=async()=>{initializeEq();eqContext?.resume().catch(()=>{});if(!currentId){if(!queue.length)makeQueue();if(queue.length)await playTrack(queue[0]);return}if(audio.paused){try{await audio.play()}catch(e){say('Unable to play this file in the current browser.')}}else audio.pause();renderNow()};
 $('next').onclick=playNext;$('previous').onclick=playPrevious;
 $('shuffleToggle').onclick=()=>{shuffle=!shuffle;$('mode').value=shuffle?'random':'custom';shuffleBag=[];if(shuffle)queue=shuffleIds(queue);renderQueue();renderNow()};
 $('repeatToggle').onclick=()=>{repeatOne=!repeatOne;renderNow()};
